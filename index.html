@@ -264,10 +264,11 @@ function drawSatCountChart() {
   if (!allData.gga.length) return;
   var data = allData.gga.map(function(g,i){return{x:i,y:g.numSatellites||0};});
   charts.satCount.clear();
-  charts.satCount.drawTitle('Satellite Count Time Series');
   charts.satCount.drawLine([{data:data,color:'#28a745',fill:true}],{
+    title:'Sats Used',
     xLabel:'Epoch',yLabel:'Satellites',yMin:0,
-    yStepSize:1
+    yStepSize:1,
+    xDecimals:0
   });
 }
 
