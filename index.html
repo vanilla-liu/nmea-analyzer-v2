@@ -445,7 +445,7 @@ function updateRawData() {
     renderRawPagination(total);
 
     html += '<h4 style="margin:8px 0">GGA (record '+(startIdx+1)+'-'+endIdx+' of '+total+')</h4>';
-    html += '<table class="sat-table"><thead><tr><th>Time</th><th>Latitude</th><th>Longitude</th><th>Quality</th><th>Sats</th><th>HDOP</th><th>Alt_MSL(m)</th><th>Alt_HAE(m)</th><th>Diff_age</th><th>Station ID</th></tr></thead><tbody>';
+    html += '<table class="sat-table"><thead><tr><th>Time</th><th>Latitude</th><th>Longitude</th><th>Quality</th><th>Sats</th><th>HDOP</th><th>Alt_MSL</th><th>Alt_HAE</th><th>Diff_age</th><th>Station ID</th></tr></thead><tbody>';
     ggaPage.forEach(function(g){
       var qColor = '#000000';
       if(g.quality===1)qColor='#ffff00';
