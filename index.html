@@ -1,0 +1,853 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>NMEA Analyzer v2.0</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="header">
+  <h1>NMEA Analyzer v2.0</h1>
+  <span class="version">NMEA V4.1 | GNSS Multi-Constellation</span>
+</div>
+
+<div class="container">
+
+  <!-- Drop Zone -->
+  <div class="card">
+    <div class="card-body">
+      <div class="drop-zone" id="dropZone">
+        <h3>Drag NMEA files here or click to select</h3>
+        <p>Supported: .txt .nmea .log | Multi-file supported</p>
+        <input type="file" id="fileInput" multiple accept=".txt,.nmea,.log,.dat" style="display:none">
+      </div>
+      <div id="fileInfo" class="file-info" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="stats-bar" id="statsBar">
+    <div class="stat-item"><span class="stat-label">Total Epochs</span><span class="stat-value" id="statTotal">0</span></div>
+    <div class="stat-item"><span class="stat-label">Valid Fix</span><span class="stat-value green" id="statValid">0</span></div>
+    <div class="stat-item"><span class="stat-label">Valid Rate</span><span class="stat-value" id="statRate">0%</span></div>
+    <div class="stat-item"><span class="stat-label">Sat Avg</span><span class="stat-value" id="statSats">0</span></div>
+    <div class="stat-item"><span class="stat-label">HDOP Avg</span><span class="stat-value" id="statHDOP">-</span></div>
+    <div class="stat-item"><span class="stat-label">Stn ID</span><span class="stat-value" id="statStation">-</span></div>
+  </div>
+
+  <!-- Filter Bar -->
+  <div class="filter-bar">
+    <label>Fix Quality:</label>
+    <select id="filterQuality">
+      <option value="all">All</option>
+      <option value="0">0 - Invalid</option>
+      <option value="1">1 - Single</option>
+      <option value="2">2 - DGNSS</option>
+      <option value="4">4 - RTK Fixed</option>
+      <option value="5">5 - RTK Float</option>
+      <option value="6">6 - DR</option>
+    </select>
+    <button class="btn btn-primary" onclick="applyFilter()">Apply</button>
+    <button class="btn btn-danger" onclick="clearAll()">Clear</button>
+    <span style="flex:1"></span>
+    <span id="filterInfo" style="font-size:12px;color:#6c757d"></span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('position')">Position</div>
+    <div class="tab" onclick="switchTab('satellite')">Satellite</div>
+    <div class="tab" onclick="switchTab('raw')">Raw Data</div>
+    <span style="flex:1"></span>
+    <button class="btn btn-outline" onclick="exportKML()" style="margin-left:auto">Export KML</button>
+  </div>
+
+  <!-- Position Tab -->
+  <div class="tab-content active" id="tab-position">
+    <div class="chart-row cols-2">
+      <div class="chart-container" id="trajectoryChart"></div>
+      <div class="chart-container" id="qualityPieChart"></div>
+    </div>
+    <div class="chart-row cols-2">
+      <div class="chart-container" id="rmsChart"></div>
+      <div class="chart-container" id="satCountChart"></div>
+    </div>
+  </div>
+
+  <!-- Satellite Tab -->
+  <div class="tab-content" id="tab-satellite">
+    <div class="chart-row cols-2">
+      <div class="chart-container" id="skyPlotChart"></div>
+      <div class="chart-container" id="snrQualityChart"></div>
+    </div>
+    <div class="chart-row cols-2">
+      <div class="chart-container" id="snrChart"></div>
+      <div class="chart-container" id="dopChart"></div>
+    </div>
+    <div class="card">
+      <div class="card-header" style="justify-content:space-between">
+        <span>Satellite PRN List</span>
+        <button class="btn btn-outline" onclick="exportSatCSV()">Export CSV</button>
+      </div>
+      <div class="card-body">
+        <div class="sat-table-container" id="satTableContainer">
+          <table class="sat-table">
+            <thead><tr><th>Constellation</th><th>PRN</th><th>Elevation</th><th>Azimuth</th><th>Signal</th><th>Avg SNR</th><th>Max SNR</th><th>Min SNR</th><th>Samples</th><th>Sync Epochs</th><th>GSA</th><th>GSV</th><th>Utilization</th></tr></thead>
+            <tbody id="satTableBody"></tbody>
+          </table>
+        </div>
+        <div class="sat-notes" style="margin-top:8px;font-size:11px;color:#6c757d;line-height:1.6">
+          <strong>Column Definitions:</strong>
+          <b>Samples</b> = total GSV records for this PRN (SNR &gt; 0) &nbsp;|&nbsp;
+          <b>Sync Epochs</b> = timestamps where both GSA and GSV exist &nbsp;|&nbsp;
+          <b>GSA</b> = sync epochs where PRN appears in GSA (fix satellites) &nbsp;|&nbsp;
+          <b>GSV</b> = sync epochs where PRN appears in GSV (visible satellites) &nbsp;|&nbsp;
+          <b>Utilization</b> = GSA / GSV &times; 100%
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raw Data Tab -->
+  <div class="tab-content" id="tab-raw">
+    <div class="card">
+      <div class="card-header" style="justify-content:space-between">
+        <span>Parsed NMEA Data</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="rawPageSelect" onchange="changeRawPage()" style="padding:4px 8px;font-size:12px">
+            <option value="100">100 per page</option>
+            <option value="200" selected>200 per page</option>
+            <option value="500">500 per page</option>
+          </select>
+          <button class="btn btn-outline" onclick="exportRawCSV()">Export CSV</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="rawPagination" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px"></div>
+        <div class="data-panel" id="rawDataPanel">
+          <div class="empty-state">Load a file to view parsed data</div>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+<div class="footer">NMEA Analyzer v2.0 | NMEA V4.1 | Supports GNGGA/GNGST/GNGSA/GxGSV/GNRMC/GNVTG</div>
+
+<script src="nmea-parser.js"></script>
+<script src="charts.js"></script>
+<script src="gga-analysis.js"></script>
+<script src="satellite-analysis.js"></script>
+<script>
+var parser = new NMEAParser();
+var ggaAnalysis = new GGAAnalysis();
+var satAnalysis = new SatelliteAnalysis(parser);
+var allData = {gga:[],gst:[],gsa:[],gsv:[],rmc:[],vtg:[]};
+var charts = {};
+var currentTab = 'position';
+
+function initCharts() {
+  charts.trajectory = new NMEAChart('trajectoryChart');
+  charts.qualityPie = new NMEAChart('qualityPieChart');
+  charts.rms = new NMEAChart('rmsChart');
+  charts.satCount = new NMEAChart('satCountChart');
+  charts.skyPlot = new NMEAChart('skyPlotChart');
+  charts.snrQuality = new NMEAChart('snrQualityChart');
+  charts.snr = new NMEAChart('snrChart');
+  charts.dop = new NMEAChart('dopChart');
+  resizeVisibleCharts();
+}
+
+function resizeVisibleCharts() {
+  Object.keys(charts).forEach(function(k) {
+    var c = charts[k];
+    if (!c || !c.container) return;
+    var tab = '';
+    if (k==='trajectory'||k==='qualityPie'||k==='rms'||k==='satCount') tab='position';
+    else if (k==='skyPlot'||k==='snrQuality'||k==='snr'||k==='dop') tab='satellite';
+    if (tab === currentTab) {
+      c.resize();
+    }
+  });
+}
+
+function switchTab(name) {
+  currentTab = name;
+  document.querySelectorAll('.tab').forEach(function(t,i){
+    var names=['position','satellite','raw'];
+    t.classList.toggle('active',names[i]===name);
+  });
+  document.querySelectorAll('.tab-content').forEach(function(tc){
+    tc.classList.toggle('active',tc.id==='tab-'+name);
+  });
+  requestAnimationFrame(function(){
+    resizeVisibleCharts();
+    updateAllCharts();
+  });
+}
+
+function applyFilter() {
+  var q = document.getElementById('filterQuality').value;
+  ggaAnalysis.applyFilter(q);
+  updateStats();
+  updateAllCharts();
+}
+
+function clearAll() {
+  allData = {gga:[],gst:[],gsa:[],gsv:[],rmc:[],vtg:[]};
+  ggaAnalysis.setData([]);
+  satAnalysis.setData([],[]);
+  rawPage = 1;
+  document.getElementById('statsBar').querySelectorAll('.stat-value').forEach(function(el){el.textContent='0';});
+  document.getElementById('fileInfo').style.display='none';
+  document.getElementById('filterInfo').textContent='';
+  document.getElementById('satTableBody').innerHTML='';
+  document.getElementById('rawDataPanel').innerHTML='<div class="empty-state">Load a file to view parsed data</div>';
+  document.getElementById('rawPagination').innerHTML='';
+  Object.values(charts).forEach(function(c){if(c&&c.clear)c.clear();});
+}
+
+function updateStats() {
+  var stats = ggaAnalysis.getStatistics();
+  document.getElementById('statTotal').textContent = stats?stats.total:0;
+  document.getElementById('statValid').textContent = stats?stats.validCount:0;
+  document.getElementById('statRate').textContent = stats?stats.validRate.toFixed(1)+'%':'0%';
+  var maxSats = 0;
+  var satsSum = 0;
+  var satsCount = 0;
+  allData.gga.forEach(function(g){if(g.numSatellites>0){satsSum+=g.numSatellites;satsCount++;if(g.numSatellites>maxSats)maxSats=g.numSatellites;}});
+  document.getElementById('statSats').textContent = satsCount>0?Math.round(satsSum/satsCount):0;
+  document.getElementById('statHDOP').textContent = stats&&stats.hdop?stats.hdop.avg.toFixed(2):'-';
+  var stations = stats?Object.keys(stats.stationIds):[];
+  document.getElementById('statStation').textContent = stations.length?stations.join(','):'-';
+  var fi = document.getElementById('filterInfo');
+  if (ggaAnalysis.filterQuality === 'all') {
+    fi.textContent = stats ? 'Showing all '+stats.total+' epochs' : '';
+  } else {
+    var timeRanges = ggaAnalysis.getTimeRanges();
+    fi.textContent = 'Filtered: '+(stats?stats.filteredCount:0)+' of '+(stats?stats.total:0)+' epochs' + (timeRanges ? ' | '+timeRanges : '');
+  }
+}
+
+function updateAllCharts() {
+  // Always update raw data and satellite table (independent of GGA)
+  updateRawData();
+  updateSatTable();
+
+  // Update charts only if data exists
+  if (!allData.gga.length && !allData.gsa.length && !allData.gsv.length) return;
+
+  if (allData.gga.length) {
+    if (ggaAnalysis.filteredData.length) {
+      ggaAnalysis.drawTrajectory(charts.trajectory);
+      ggaAnalysis.drawQualityPie(charts.qualityPie);
+    } else {
+      charts.trajectory.clear();
+      charts.trajectory.drawTitle('Plot');
+      charts.qualityPie.clear();
+      charts.qualityPie.drawTitle('Fix Quality Distribution');
+    }
+    ggaAnalysis.drawRMSTimeSeries(charts.rms, allData.gst, allData.gga);
+    drawSatCountChart();
+  }
+  if (allData.gsa.length || allData.gsv.length) {
+    satAnalysis.drawSkyPlot(charts.skyPlot);
+    satAnalysis.drawSNRQualityPie(charts.snrQuality);
+    satAnalysis.drawSNRChart(charts.snr);
+    satAnalysis.drawDOPTimeSeries(charts.dop);
+  }
+}
+
+function drawSatCountChart() {
+  if (!allData.gga.length) return;
+  var data = allData.gga.map(function(g,i){return{x:i,y:g.numSatellites||0};});
+  charts.satCount.clear();
+  charts.satCount.drawTitle('Satellite Count Time Series');
+  charts.satCount.drawLine([{data:data,color:'#28a745',fill:true}],{
+    xLabel:'Epoch',yLabel:'Satellites',yMin:0,
+    yStepSize:1
+  });
+}
+
+function updateSatTable() {
+  var tbody = document.getElementById('satTableBody');
+  var satMap = satAnalysis.satelliteMap;
+  var badgeClass = {GP:'badge-gps',GL:'badge-glo',GA:'badge-gal',GB:'badge-bds',GQ:'badge-qzss'};
+  var constName = {GP:'GPS',GL:'GLONASS',GA:'Galileo',GB:'BDS',GQ:'QZSS'};
+  var order = ['GP','GB','GA','GL','GQ'];
+
+  // Detect per-constellation: does it have multiple signal IDs?
+  var constSignalCount = {};
+  Object.values(satMap).forEach(function(sat){
+    if(sat.signalId>0){
+      if(!constSignalCount[sat.talkerId]) constSignalCount[sat.talkerId]={};
+      constSignalCount[sat.talkerId][sat.signalId]=1;
+    }
+  });
+  var anyMultiSignal = false;
+  Object.keys(constSignalCount).forEach(function(tid){
+    if(Object.keys(constSignalCount[tid]).length > 1) anyMultiSignal = true;
+  });
+
+  // Default signal name for single-frequency constellations
+  var defaultSignal = {GP:'L1 C/A',GL:'G1 C/A',GA:'E1',GB:'B1I',GQ:'L1 C/A'};
+
+  // Build synchronized GSA/GSV counts (only timestamps that appear in both)
+  var gsaByTimestamp = {};
+  allData.gsa.forEach(function(gsa){
+    if(!gsa.timestamp) return;
+    var ts = gsa.timestamp.toString();
+    if(!gsaByTimestamp[ts]) gsaByTimestamp[ts] = [];
+    gsaByTimestamp[ts].push(gsa);
+  });
+  var gsvByTimestamp = {};
+  allData.gsv.forEach(function(gsv){
+    if(!gsv.timestamp) return;
+    var ts = gsv.timestamp.toString();
+    if(!gsvByTimestamp[ts]) gsvByTimestamp[ts] = [];
+    gsvByTimestamp[ts].push(gsv);
+  });
+  // Find synchronized timestamps
+  var syncTimestamps = Object.keys(gsaByTimestamp).filter(function(ts){return gsvByTimestamp[ts];});
+  var syncEpochCount = syncTimestamps.length;
+
+  // Build GSA PRN count within synchronized epochs (count unique PRN per timestamp)
+  var gsaPrnCount = {};
+  syncTimestamps.forEach(function(ts){
+    var gsaPrns = {};
+    gsaByTimestamp[ts].forEach(function(gsa){
+      gsa.satellites.forEach(function(prn){
+        gsaPrns[gsa.systemPrefix + '_' + prn] = true;
+      });
+    });
+    Object.keys(gsaPrns).forEach(function(key){
+      gsaPrnCount[key] = (gsaPrnCount[key]||0) + 1;
+    });
+  });
+  // Build GSV PRN count within synchronized epochs (all appearances, no SNR filter)
+  var gsvPrnCount = {};
+  syncTimestamps.forEach(function(ts){
+    var gsvPrnsAtTs = {};
+    gsvByTimestamp[ts].forEach(function(gsv){
+      gsv.satellites.forEach(function(sat){
+        var key = gsv.talkerId + '_' + sat.prn;
+        gsvPrnsAtTs[key] = true;
+      });
+    });
+    Object.keys(gsvPrnsAtTs).forEach(function(key){
+      gsvPrnCount[key] = (gsvPrnCount[key]||0) + 1;
+    });
+  });
+
+  var rows = '';
+  order.forEach(function(tid){
+    var sats = Object.values(satMap).filter(function(sat){return sat.talkerId===tid&&sat.signalId>0;});
+    sats.sort(function(a,b){return a.prn-b.prn||a.signalId-b.signalId;});
+    var grouped = {};
+    sats.forEach(function(sat){
+      var pk = sat.talkerId+'_'+sat.prn;
+      if(!grouped[pk]) grouped[pk] = [];
+      grouped[pk].push(sat);
+    });
+    Object.keys(grouped).forEach(function(pk){
+      var group = grouped[pk];
+      var first = group[0];
+      var maxSamples = 0;
+      group.forEach(function(s){if(s.snrHistory.length>maxSamples)maxSamples=s.snrHistory.length;});
+      var gsaKey = first.talkerId + '_' + first.prn;
+      var gsaCnt = gsaPrnCount[gsaKey] || 0;
+      var gsvCnt = Math.min(gsvPrnCount[gsaKey] || 0, maxSamples, syncEpochCount);
+      gsvCnt = Math.max(gsvCnt, gsaCnt);
+      var utilization = gsvCnt > 0 ? (gsaCnt / gsvCnt * 100) : 0;
+      group.forEach(function(sat,idx){
+        var bc = badgeClass[sat.talkerId]||'';
+        var cn = constName[sat.talkerId]||sat.talkerId;
+        var avgSNR = sat.snrHistory.length?(sat.snrHistory.reduce(function(a,b){return a+b;},0)/sat.snrHistory.length):0;
+        var maxSNR = sat.snrHistory.length?Math.max.apply(null,sat.snrHistory):0;
+        var minSNR = sat.snrHistory.length?Math.min.apply(null,sat.snrHistory.filter(function(v){return v>0;})):0;
+        var snrColor = avgSNR>=40?'#28a745':avgSNR>=30?'#17a2b8':avgSNR>=20?'#ffc107':'#dc3545';
+        rows += '<tr>';
+        if(idx===0) rows += '<td rowspan="'+group.length+'"><span class="badge '+bc+'">'+cn+'</span></td><td rowspan="'+group.length+'">'+first.prn+'</td>';
+        rows += '<td>'+sat.elevation.toFixed(1)+'\u00B0</td>';
+        rows += '<td>'+sat.azimuth.toFixed(1)+'\u00B0</td>';
+        if(anyMultiSignal){
+          var sigName = sat.signalName || defaultSignal[sat.talkerId] || '-';
+          rows += '<td>'+sigName+'</td>';
+        } else {
+          rows += '<td></td>';
+        }
+        rows += '<td><div class="progress-container"><div class="progress-bar"><div class="progress-fill" style="width:'+Math.min(avgSNR,50)/50*100+'%;background:'+snrColor+'"></div></div><span>'+avgSNR.toFixed(1)+'</span></div></td>';
+        rows += '<td>'+maxSNR.toFixed(0)+'</td>';
+        rows += '<td>'+minSNR.toFixed(0)+'</td>';
+        rows += '<td>'+sat.snrHistory.length+'</td>';
+        if(idx===0) rows += '<td rowspan="'+group.length+'">'+syncEpochCount+'</td><td rowspan="'+group.length+'">'+gsaCnt+'</td><td rowspan="'+group.length+'">'+gsvCnt+'</td><td rowspan="'+group.length+'">'+utilization.toFixed(1)+'%</td>';
+        rows += '</tr>';
+      });
+    });
+  });
+  tbody.innerHTML = rows || '<tr><td colspan="13" class="empty-state">No satellite data</td></tr>';
+}
+
+var rawPage = 1;
+var rawPerPage = 200;
+
+function changeRawPage() {
+  rawPerPage = parseInt(document.getElementById('rawPageSelect').value, 10) || 200;
+  rawPage = 1;
+  updateRawData();
+}
+
+function renderRawPagination(total) {
+  var totalPages = Math.ceil(total / rawPerPage);
+  if (totalPages <= 1) { document.getElementById('rawPagination').innerHTML = ''; return; }
+  var html = '<span>Page</span>';
+  html += '<button class="btn btn-outline" onclick="rawPageGo(1)" '+(rawPage===1?'disabled':'')+'>&laquo;</button>';
+  html += '<button class="btn btn-outline" onclick="rawPageGo('+(rawPage-1)+')" '+(rawPage===1?'disabled':'')+'>&lsaquo;</button>';
+  var start = Math.max(1, rawPage - 3);
+  var end = Math.min(totalPages, rawPage + 3);
+  for (var i = start; i <= end; i++) {
+    html += '<button class="btn '+(i===rawPage?'btn-primary':'btn-outline')+'" onclick="rawPageGo('+i+')">'+i+'</button>';
+  }
+  html += '<button class="btn btn-outline" onclick="rawPageGo('+(rawPage+1)+')" '+(rawPage===totalPages?'disabled':'')+'>&rsaquo;</button>';
+  html += '<button class="btn btn-outline" onclick="rawPageGo('+totalPages+')" '+(rawPage===totalPages?'disabled':'')+'>&raquo;</button>';
+  html += '<span>of '+totalPages+' ('+total+' records)</span>';
+  document.getElementById('rawPagination').innerHTML = html;
+}
+
+function rawPageGo(p) {
+  var total = allData.gga.length;
+  var totalPages = Math.ceil(total / rawPerPage);
+  rawPage = Math.max(1, Math.min(p, totalPages));
+  updateRawData();
+}
+
+function updateRawData() {
+  var panel = document.getElementById('rawDataPanel');
+  if (!allData.gga.length && !allData.gst.length && !allData.gsa.length && !allData.gsv.length && !allData.rmc.length) {
+    panel.innerHTML = '<div class="empty-state">Load a file to view parsed data</div>';
+    document.getElementById('rawPagination').innerHTML = '';
+    return;
+  }
+  var html = '';
+
+  // GGA with pagination
+  if (allData.gga.length) {
+    var total = allData.gga.length;
+    var totalPages = Math.ceil(total / rawPerPage);
+    if (rawPage > totalPages) rawPage = totalPages;
+    var startIdx = (rawPage - 1) * rawPerPage;
+    var endIdx = Math.min(startIdx + rawPerPage, total);
+    var ggaPage = allData.gga.slice(startIdx, endIdx);
+
+    renderRawPagination(total);
+
+    html += '<h4 style="margin:8px 0">GGA (record '+(startIdx+1)+'-'+endIdx+' of '+total+')</h4>';
+    html += '<table class="sat-table"><thead><tr><th>Time</th><th>Latitude</th><th>Longitude</th><th>Quality</th><th>Sats</th><th>HDOP</th><th>Alt_MSL(m)</th><th>Alt_HAE(m)</th><th>Diff_age</th><th>Station ID</th></tr></thead><tbody>';
+    ggaPage.forEach(function(g){
+      var qColor = '#000000';
+      if(g.quality===1)qColor='#ffff00';
+      else if(g.quality===2)qColor='#00ff00';
+      else if(g.quality===4)qColor='#0000ff';
+      else if(g.quality===5)qColor='#ff0000';
+      else if(g.quality===6)qColor='#808080';
+      html += '<tr><td>'+(g.timestamp?g.timestamp.toString():'-')+'</td>';
+      html += '<td>'+(g.latitude?g.latitude.formatted:'-')+'</td>';
+      html += '<td>'+(g.longitude?g.longitude.formatted:'-')+'</td>';
+      html += '<td style="color:'+qColor+';font-weight:600">'+g.qualityText+'</td>';
+      html += '<td>'+g.numSatellites+'</td>';
+      html += '<td>'+g.hdop.toFixed(2)+'</td>';
+      html += '<td>'+g.altitude.toFixed(2)+' m</td>';
+      html += '<td>'+(g.altitude+g.geoidSeparation).toFixed(2)+' m</td>';
+      html += '<td>'+g.dgpsAge.toFixed(1)+'s</td>';
+      html += '<td>'+(g.dgpsStationId||'-')+'</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  // GST (last 100, no pagination)
+  if (allData.gst.length) {
+    var gstShow = allData.gst.slice(-100);
+    html += '<h4 style="margin:16px 0 8px">GST (last '+gstShow.length+' of '+allData.gst.length+')</h4>';
+    html += '<table class="sat-table"><thead><tr><th>Time</th><th>RMS(m)</th><th>Semi-Major(m)</th><th>Semi-Minor(m)</th><th>Orientation</th><th>Lat Err(m)</th><th>Lon Err(m)</th><th>Alt Err(m)</th></tr></thead><tbody>';
+    gstShow.forEach(function(g){
+      html += '<tr><td>'+(g.timestamp?g.timestamp.toString():'-')+'</td>';
+      html += '<td>'+g.rmsError.toFixed(3)+'</td>';
+      html += '<td>'+g.semiMajorError.toFixed(3)+'</td>';
+      html += '<td>'+g.semiMinorError.toFixed(3)+'</td>';
+      html += '<td>'+g.semiMajorOrientation.toFixed(1)+'\u00B0</td>';
+      html += '<td>'+g.latitudeError.toFixed(3)+'</td>';
+      html += '<td>'+g.longitudeError.toFixed(3)+'</td>';
+      html += '<td>'+g.altitudeError.toFixed(3)+'</td></tr>';
+    });
+    html += '</tbody></table>';
+  }
+
+  panel.innerHTML = html;
+}
+
+function exportRawCSV() {
+  if (!allData.gga.length && !allData.gst.length) { alert('No data to export'); return; }
+
+  var qualityText = {0:'Invalid',1:'Single',2:'DGNSS',4:'RTK_Fixed',5:'RTK_Float',6:'DR'};
+  var bom = '\uFEFF';
+
+  function fmtTime(t) {
+    if (!t) return '';
+    return String(t.hours||0).padStart(2,'0')+':'+String(t.minutes||0).padStart(2,'0')+':'+String(Math.floor(t.seconds||0)).padStart(2,'0');
+  }
+
+  if (allData.gga.length) {
+    var csv = 'Time,Latitude (°),Lat Dir,Longitude (°),Lon Dir,Quality,Sats,HDOP,Alt_MSL(m),Alt_HAE(m),Diff_age (s),Station ID\n';
+    allData.gga.forEach(function(g){
+      csv += fmtTime(g.timestamp)+',';
+      csv += (g.latitude?g.latitude.decimalDegrees.toFixed(8):'')+',';
+      csv += (g.latitude?g.latitude.direction:'')+',';
+      csv += (g.longitude?g.longitude.decimalDegrees.toFixed(8):'')+',';
+      csv += (g.longitude?g.longitude.direction:'')+',';
+      csv += (qualityText[g.quality]||'Unknown')+',';
+      csv += g.numSatellites+',';
+      csv += g.hdop.toFixed(2)+',';
+      csv += g.altitude.toFixed(2)+',';
+      csv += (g.altitude+g.geoidSeparation).toFixed(2)+',';
+      csv += g.dgpsAge.toFixed(1)+',';
+      csv += (g.dgpsStationId||'')+'\n';
+    });
+    var blob = new Blob([bom+csv], {type:'text/csv;charset=utf-8;'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'nmea_gga.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  if (allData.gst.length) {
+    var csv2 = 'Time,RMS(m),Semi-Major(m),Semi-Minor(m),Orientation,Lat Err(m),Lon Err(m),Alt Err(m)\n';
+    allData.gst.forEach(function(g){
+      csv2 += fmtTime(g.timestamp)+',';
+      csv2 += g.rmsError.toFixed(3)+',';
+      csv2 += g.semiMajorError.toFixed(3)+',';
+      csv2 += g.semiMinorError.toFixed(3)+',';
+      csv2 += g.semiMajorOrientation.toFixed(1)+',';
+      csv2 += g.latitudeError.toFixed(3)+',';
+      csv2 += g.longitudeError.toFixed(3)+',';
+      csv2 += g.altitudeError.toFixed(3)+'\n';
+    });
+    var blob2 = new Blob([bom+csv2], {type:'text/csv;charset=utf-8;'});
+    var a2 = document.createElement('a');
+    a2.href = URL.createObjectURL(blob2);
+    a2.download = 'nmea_gst.csv';
+    a2.click();
+    URL.revokeObjectURL(a2.href);
+  }
+}
+
+function exportSatCSV() {
+  var satMap = satAnalysis.satelliteMap;
+  var constName = {GP:'GPS',GL:'GLONASS',GA:'Galileo',GB:'BDS',GQ:'QZSS'};
+  var order = ['GP','GB','GA','GL','GQ'];
+
+  // Detect per-constellation multi-signal
+  var constSignalCount = {};
+  Object.values(satMap).forEach(function(sat){
+    if(sat.signalId>0){
+      if(!constSignalCount[sat.talkerId]) constSignalCount[sat.talkerId]={};
+      constSignalCount[sat.talkerId][sat.signalId]=1;
+    }
+  });
+  var anyMulti = false;
+  Object.keys(constSignalCount).forEach(function(tid){
+    if(Object.keys(constSignalCount[tid]).length > 1) anyMulti = true;
+  });
+
+  // Build synchronized GSA/GSV counts (only timestamps that appear in both)
+  var gsaByTimestamp = {};
+  allData.gsa.forEach(function(gsa){
+    if(!gsa.timestamp) return;
+    var ts = gsa.timestamp.toString();
+    if(!gsaByTimestamp[ts]) gsaByTimestamp[ts] = [];
+    gsaByTimestamp[ts].push(gsa);
+  });
+  var gsvByTimestamp = {};
+  allData.gsv.forEach(function(gsv){
+    if(!gsv.timestamp) return;
+    var ts = gsv.timestamp.toString();
+    if(!gsvByTimestamp[ts]) gsvByTimestamp[ts] = [];
+    gsvByTimestamp[ts].push(gsv);
+  });
+  var syncTimestamps = Object.keys(gsaByTimestamp).filter(function(ts){return gsvByTimestamp[ts];});
+  var syncEpochCount = syncTimestamps.length;
+
+  // Build GSA PRN count within synchronized epochs
+  var gsaPrnCount = {};
+  syncTimestamps.forEach(function(ts){
+    var gsaPrns = {};
+    gsaByTimestamp[ts].forEach(function(gsa){
+      gsa.satellites.forEach(function(prn){
+        gsaPrns[gsa.systemPrefix + '_' + prn] = true;
+      });
+    });
+    Object.keys(gsaPrns).forEach(function(key){
+      gsaPrnCount[key] = (gsaPrnCount[key]||0) + 1;
+    });
+  });
+  // Build GSV PRN count within synchronized epochs (all appearances, no SNR filter)
+  var gsvPrnCount = {};
+  syncTimestamps.forEach(function(ts){
+    var gsvPrnsAtTs = {};
+    gsvByTimestamp[ts].forEach(function(gsv){
+      gsv.satellites.forEach(function(sat){
+        var key = gsv.talkerId + '_' + sat.prn;
+        gsvPrnsAtTs[key] = true;
+      });
+    });
+    Object.keys(gsvPrnsAtTs).forEach(function(key){
+      gsvPrnCount[key] = (gsvPrnCount[key]||0) + 1;
+    });
+  });
+
+  var defaultSignal = {GP:'L1 C/A',GL:'G1 C/A',GA:'E1',GB:'B1I',GQ:'L1 C/A'};
+  var header = anyMulti
+    ? 'Constellation,PRN,Elevation,Azimuth,Signal,Avg SNR,Max SNR,Min SNR,Samples,Sync Epochs,GSA,GSV,Utilization\n'
+    : 'Constellation,PRN,Elevation,Azimuth,Avg SNR,Max SNR,Min SNR,Samples,Sync Epochs,GSA,GSV,Utilization\n';
+  var rows = '';
+  order.forEach(function(tid){
+    var sats = Object.values(satMap).filter(function(sat){return sat.talkerId===tid&&sat.signalId>0;});
+    sats.sort(function(a,b){return a.prn-b.prn||a.signalId-b.signalId;});
+    var grouped = {};
+    sats.forEach(function(sat){
+      var pk = sat.talkerId+'_'+sat.prn;
+      if(!grouped[pk]) grouped[pk] = [];
+      grouped[pk].push(sat);
+    });
+    Object.keys(grouped).forEach(function(pk){
+      var group = grouped[pk];
+      var first = group[0];
+      var maxSamples = 0;
+      group.forEach(function(s){if(s.snrHistory.length>maxSamples)maxSamples=s.snrHistory.length;});
+      var gsaKey = first.talkerId + '_' + first.prn;
+      var gsaCnt = gsaPrnCount[gsaKey] || 0;
+      var gsvCnt = Math.min(gsvPrnCount[gsaKey] || 0, maxSamples, syncEpochCount);
+      gsvCnt = Math.max(gsvCnt, gsaCnt);
+      var utilization = gsvCnt > 0 ? (gsaCnt / gsvCnt * 100) : 0;
+      group.forEach(function(sat,idx){
+        var cn = constName[sat.talkerId]||sat.talkerId;
+        var avgSNR = sat.snrHistory.length?(sat.snrHistory.reduce(function(a,b){return a+b;},0)/sat.snrHistory.length):0;
+        var maxSNR = sat.snrHistory.length?Math.max.apply(null,sat.snrHistory):0;
+        var minSNR = sat.snrHistory.length?Math.min.apply(null,sat.snrHistory.filter(function(v){return v>0;})):0;
+        var sig = anyMulti ? (sat.signalName||defaultSignal[sat.talkerId]||'') : '';
+        var syncVal = idx===0 ? syncEpochCount : '';
+        var gsaVal = idx===0 ? gsaCnt : '';
+        var gsvVal = idx===0 ? gsvCnt : '';
+        var utilVal = idx===0 ? utilization.toFixed(1)+'%' : '';
+        if(anyMulti){
+          rows += cn+','+sat.prn+','+sat.elevation.toFixed(1)+','+sat.azimuth.toFixed(1)+','+sig+','+avgSNR.toFixed(1)+','+maxSNR.toFixed(0)+','+minSNR.toFixed(0)+','+sat.snrHistory.length+','+syncVal+','+gsaVal+','+gsvVal+','+utilVal+'\n';
+        } else {
+          rows += cn+','+sat.prn+','+sat.elevation.toFixed(1)+','+sat.azimuth.toFixed(1)+','+avgSNR.toFixed(1)+','+maxSNR.toFixed(0)+','+minSNR.toFixed(0)+','+sat.snrHistory.length+','+syncVal+','+gsaVal+','+gsvVal+','+utilVal+'\n';
+        }
+      });
+    });
+  });
+  var blob = new Blob(['\uFEFF'+header+rows],{type:'text/csv;charset=utf-8;'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'satellite_stats.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportKML() {
+  var gga = allData.gga;
+  if (!gga || !gga.length) { alert('No GGA data to export'); return; }
+
+  var qualityColors = {0:'ffaaaaaa',1:'ffffff00',2:'ff00ff00',4:'ffff0000',5:'ff0000ff',6:'ffdddddd'};
+  var qualityNames = {0:'Invalid',1:'Single',2:'DGNSS',4:'RTK Fixed',5:'RTK Float',6:'DR'};
+
+  var points = [];
+  var skipped = 0;
+  for (var i = 0; i < gga.length; i++) {
+    try {
+      var g = gga[i];
+      if (!g || !g.latitude || !g.longitude) { skipped++; continue; }
+      var lat = g.latitude.decimalDegrees;
+      var lng = g.longitude.decimalDegrees;
+      var alt = g.altitude;
+      if (typeof lat !== 'number' || typeof lng !== 'number') { skipped++; continue; }
+      if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) { skipped++; continue; }
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) { skipped++; continue; }
+      if (typeof alt !== 'number' || isNaN(alt)) alt = 0;
+      var q = g.quality;
+      if (!qualityColors[q]) q = 0;
+      points.push({
+        coord: lng.toFixed(8)+','+lat.toFixed(8)+','+alt.toFixed(3),
+        lat: lat.toFixed(8), lng: lng.toFixed(8), alt: alt.toFixed(3),
+        q: q, time: g.timestamp?g.timestamp.toString():'', timeObj: g.timestamp,
+        sats: g.numSatellites||0, hdop: g.hdop?g.hdop.toFixed(2):'-',
+        dgpsAge: g.dgpsAge?g.dgpsAge.toFixed(1):'-', stn: g.dgpsStationId||'-'
+      });
+    } catch(e) { skipped++; }
+  }
+
+  if (!points.length) { alert('No valid coordinates (skipped '+skipped+')'); return; }
+
+  var kml = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n';
+  kml += '  <name>NMEA Trajectory</name>\n';
+
+  // Styles per fix quality — pure color dot, no border
+  Object.keys(qualityColors).forEach(function(q){
+    var c = qualityColors[q];
+    kml += '  <Style id="q'+q+'">\n';
+    kml += '    <IconStyle><color>'+c+'</color><scale>0.7</scale>';
+    kml += '<Icon><href>http://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href></Icon>';
+    kml += '</IconStyle>\n';
+    kml += '    <LabelStyle><scale>0</scale></LabelStyle>\n';
+    kml += '  </Style>\n';
+  });
+
+  // Start marker — white donut, large, on top
+  kml += '  <Style id="startMarker">\n';
+  kml += '    <IconStyle><color>ffffffff</color><scale>1.5</scale>';
+  kml += '<Icon><href>http://maps.google.com/mapfiles/kml/shapes/donut.png</href></Icon>';
+  kml += '</IconStyle>\n';
+  kml += '    <LabelStyle><scale>0.8</scale><color>ffffffff</color></LabelStyle>\n';
+  kml += '  </Style>\n';
+
+  // End marker — white forbidden, large, on top
+  kml += '  <Style id="endMarker">\n';
+  kml += '    <IconStyle><color>ffffffff</color><scale>1.5</scale>';
+  kml += '<Icon><href>http://maps.google.com/mapfiles/kml/shapes/forbidden.png</href></Icon>';
+  kml += '</IconStyle>\n';
+  kml += '    <LabelStyle><scale>0.8</scale><color>ffffffff</color></LabelStyle>\n';
+  kml += '  </Style>\n';
+
+  // LineString trajectory
+  var allCoords = points.map(function(p){return p.coord;}).join(' ');
+  kml += '  <Placemark>\n    <name>Trajectory</name>\n';
+  kml += '    <Style><LineStyle><color>ffffffff</color><width>2</width></LineStyle></Style>\n';
+  kml += '    <LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>\n';
+  kml += '      <coordinates>'+allCoords+'</coordinates>\n    </LineString>\n  </Placemark>\n';
+
+  // Group points by fix quality into folders
+  var folders = {};
+  points.forEach(function(p){
+    if (!folders[p.q]) folders[p.q] = [];
+    folders[p.q].push(p);
+  });
+
+  Object.keys(folders).forEach(function(q){
+    var qname = qualityNames[q] || 'Unknown';
+    kml += '  <Folder><name>'+qname+' ('+folders[q].length+')</name>\n';
+    folders[q].forEach(function(p){
+      var desc = '<![CDATA[' +
+        '<table border="1" cellpadding="4" style="border-collapse:collapse;font-family:Arial;font-size:12px;">' +
+        '<tr><td><b>Time</b></td><td>'+p.time+'</td><td><b>Stat</b></td><td>'+p.q+' ('+qname+')</td></tr>' +
+        '<tr><td><b>Lat</b></td><td>'+p.lat+'</td><td><b>nSats</b></td><td>'+p.sats+'</td></tr>' +
+        '<tr><td><b>Lon</b></td><td>'+p.lng+'</td><td><b>HDOP</b></td><td>'+p.hdop+'</td></tr>' +
+        '<tr><td><b>Alt(m)</b></td><td>'+p.alt+'</td><td><b>Stn</b></td><td>'+p.stn+'</td></tr>' +
+        '</table>]]>';
+      kml += '    <Placemark>\n      <name></name>\n      <description>'+desc+'</description>\n';
+      kml += '      <styleUrl>#q'+q+'</styleUrl>\n';
+      kml += '      <Point><coordinates>'+p.coord+'</coordinates></Point>\n    </Placemark>\n';
+    });
+    kml += '  </Folder>\n';
+  });
+
+  function kmlTime(t) {
+    if (!t) return '';
+    return String(t.hours||0).padStart(2,'0')+':'+String(t.minutes||0).padStart(2,'0')+':'+String(Math.floor(t.seconds||0)).padStart(2,'0');
+  }
+
+  // Start/End markers in dedicated folder — renders on top of everything
+  kml += '  <Folder><name>Start / End</name>\n';
+
+  var sp = points[0];
+  kml += '    <Placemark>\n      <name>Start</name>\n      <drawOrder>99999</drawOrder>\n      <styleUrl>#startMarker</styleUrl>\n';
+  kml += '      <description><![CDATA[<b>Start</b><br/>Time: '+kmlTime(sp.timeObj)+'<br/>Lat: '+sp.lat+' N/S<br/>Lon: '+sp.lng+' E/W<br/>Quality: '+sp.q+']]></description>\n';
+  kml += '      <Point><coordinates>'+sp.coord+'</coordinates></Point>\n    </Placemark>\n';
+
+  var ep = points[points.length-1];
+  kml += '    <Placemark>\n      <name>End</name>\n      <drawOrder>99999</drawOrder>\n      <styleUrl>#endMarker</styleUrl>\n';
+  kml += '      <description><![CDATA[<b>End</b><br/>Time: '+kmlTime(ep.timeObj)+'<br/>Lat: '+ep.lat+' N/S<br/>Lon: '+ep.lng+' E/W<br/>Quality: '+ep.q+']]></description>\n';
+  kml += '      <Point><coordinates>'+ep.coord+'</coordinates></Point>\n    </Placemark>\n';
+
+  kml += '  </Folder>\n';
+
+  kml += '</Document>\n</kml>';
+
+  var info = 'Exported '+points.length+' points';
+  if (skipped > 0) info += ' (skipped '+skipped+')';
+  console.log(info);
+
+  var blob = new Blob([kml], {type:'application/vnd.google-earth.kml+xml'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'nmea_trajectory.kml';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function loadFile(file) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var content = e.target.result;
+    var lineCount = content.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(function(l){return l.trim().startsWith('$');}).length;
+    document.getElementById('fileInfo').style.display='flex';
+    document.getElementById('fileInfo').innerHTML='<span class="name">'+file.name+'</span> | '+lineCount+' NMEA sentences | '+(content.length/1024).toFixed(1)+' KB';
+    parseNMEAContent(content);
+  };
+  reader.readAsText(file);
+}
+
+function loadFiles(files) {
+  var contents = [];
+  var total = files.length;
+  var done = 0;
+  for (var i=0;i<files.length;i++) {
+    (function(idx){
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        contents[idx] = e.target.result;
+        done++;
+        if (done===total) {
+          var all = contents.join('\n');
+          var lineCount = all.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(function(l){return l.trim().startsWith('$');}).length;
+          document.getElementById('fileInfo').style.display='flex';
+          document.getElementById('fileInfo').innerHTML='<span class="name">'+files.length+' files loaded</span> | '+lineCount+' NMEA sentences';
+          parseNMEAContent(all);
+        }
+      };
+      reader.readAsText(files[idx]);
+    })(i);
+  }
+}
+
+function parseNMEAContent(content) {
+  var parsed = parser.parseContent(content);
+  allData.gga = parsed.gga;
+  allData.gst = parsed.gst;
+  allData.gsa = parsed.gsa;
+  allData.gsv = parsed.gsv;
+  allData.rmc = parsed.rmc;
+  allData.vtg = parsed.vtg;
+  ggaAnalysis.setData(allData.gga);
+  satAnalysis.setData(allData.gsa, allData.gsv);
+  updateStats();
+  resizeVisibleCharts();
+  updateAllCharts();
+}
+
+// Drop zone events
+var dropZone = document.getElementById('dropZone');
+var fileInput = document.getElementById('fileInput');
+dropZone.addEventListener('click', function(){fileInput.click();});
+fileInput.addEventListener('change', function(e){if(e.target.files.length)loadFiles(e.target.files);});
+dropZone.addEventListener('dragover',function(e){e.preventDefault();dropZone.classList.add('dragover');});
+dropZone.addEventListener('dragleave',function(){dropZone.classList.remove('dragover');});
+dropZone.addEventListener('drop',function(e){e.preventDefault();dropZone.classList.remove('dragover');if(e.dataTransfer.files.length)loadFiles(e.dataTransfer.files);});
+
+window.addEventListener('load', initCharts);
+window.addEventListener('resize', function(){ clearTimeout(window._rt); window._rt=setTimeout(function(){resizeVisibleCharts();updateAllCharts();},200); });
+</script>
+</body>
+</html>
