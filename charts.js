@@ -203,7 +203,7 @@ class NMEAChart {
   drawPie(data, config) {
     if(!this.svg||!data.length)return;
     this.clear(); this.drawTitle(config.title||'');
-    var cx=this.w*0.35, cy=this.h*0.55;
+    var cx=this.w*0.35, cy=this.h*0.50;
     var radius=Math.min(cx-30,cy-30)*0.8;
     var total=data.reduce(function(s,d){return s+d.value;},0);
     if(total===0)return;
@@ -227,9 +227,10 @@ class NMEAChart {
         self._text(lx,ly,((d.value/total)*100).toFixed(1)+'%',{'font-size':'11px','font-weight':'bold',fill:'#fff'});}
       startAngle+=sa;
     });
-    var ly=30;
-    data.forEach(function(d){
-      if(d.value===0)return;
+    var legendItems=data.filter(function(d){return d.value>0;});
+    var legendH=legendItems.length*22;
+    var ly=cy-legendH/2;
+    legendItems.forEach(function(d){
       self.svg.appendChild(self._el('rect',{x:cx+radius+30,y:ly,width:14,height:14,fill:d.color,opacity:'0.85'}));
       self._text(cx+radius+50,ly+7,d.label+': '+d.value+' ('+((d.value/total)*100).toFixed(1)+'%)',{'text-anchor':'start','font-size':'11px'});
       ly+=22;
@@ -238,8 +239,8 @@ class NMEAChart {
   drawSkyPlot(satellites, config) {
     if(!this.svg)return;
     this.clear(); this.drawTitle(config.title||'Sky Plot');
-    var cx=this.w/2, cy=this.h/2+10;
-    var radius=Math.min(cx-60,cy-40);
+    var cx=this.w/2, cy=this.h/2;
+    var radius=Math.min(cx-60,cy-50);
     var constellationColors=config.constellationColors||{GP:'#0d6efd',GL:'#6f42c1',GA:'#28a745',GB:'#dc3545',GQ:'#ffc107'};
     for(var i=0;i<=3;i++){
       var r=radius*(i/3);
@@ -273,16 +274,17 @@ class NMEAChart {
       self.svg.appendChild(self._el('circle',{cx:sx,cy:sy,r:'5',fill:col,opacity:'0.9',stroke:'#fff','stroke-width':'1'}));
       self._text(sx,sy-8,(prefix[trail.talkerId]||'')+trail.prn,{'font-size':'8px'});
     });
-    if(config.legend) this._drawLegend(config.legend);
+    if(config.legend) this._drawLegend(config.legend, 9);
   }
-  _drawLegend(items) {
+  _drawLegend(items, fontSize) {
     if(!items||!items.length)return;
     var self=this;
-    var lx=this.w-160, ly=30;
+    var fs = fontSize || 10;
+    var lx=this.w-140, ly=30;
     items.forEach(function(item){
-      self.svg.appendChild(self._el('rect',{x:lx,y:ly,width:10,height:10,fill:item.color,opacity:'0.85'}));
-      self._text(lx+15,ly+5,item.label,{'text-anchor':'start','font-size':'10px'});
-      ly+=18;
+      self.svg.appendChild(self._el('rect',{x:lx,y:ly,width:8,height:8,fill:item.color,opacity:'0.85'}));
+      self._text(lx+12,ly+4,item.label,{'text-anchor':'start','font-size':fs+'px'});
+      ly+=(fs+6);
     });
   }
 }
