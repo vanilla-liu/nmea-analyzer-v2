@@ -155,6 +155,8 @@ class GGAAnalysis {
       xLabel:'Epoch',
       yLabel:'Error (m)',
       yMin:0,
+      xDecimals:0,
+      yDecimals:3,
       thresholds:[
         {value:0.02,color:'#28a745',label:'<2cm'},
         {value:0.05,color:'#ffc107',label:'<5cm'},
