@@ -288,7 +288,7 @@ class SatelliteAnalysis {
       {data:pdopDS,color:'#6f42c1',label:'PDOP',fill:false},
       {data:hdopDS,color:'#e83e8c',label:'HDOP',fill:false},
       {data:vdopDS,color:'#20c997',label:'VDOP',fill:false}
-    ],{title:'DOP',xLabel:'Epoch',yLabel:'DOP',yMin:0,
+    ],{title:'DOP',xLabel:'Epoch',yLabel:'DOP',yMin:0,xDecimals:0,yDecimals:2,
       legend:[{label:'PDOP',color:'#6f42c1'},{label:'HDOP',color:'#e83e8c'},{label:'VDOP',color:'#20c997'}]
     });
   }
