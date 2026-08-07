@@ -60,24 +60,26 @@ class NMEAChart {
     if (!this.svg || !title) return;
     this._text(this.w/2, 18, title, {'font-size':'13px','font-weight':'bold','text-anchor':'middle'});
   }
-  _drawGrid(p,w,h,xMin,xMax,yMin,yMax,xLabel,yLabel,yStepSize) {
+  _drawGrid(p,w,h,xMin,xMax,yMin,yMax,xLabel,yLabel,yStepSize,xDecimals,yDecimals) {
     var steps = 5;
     if (yStepSize > 0) {
       steps = Math.round((yMax - yMin) / yStepSize);
       if (steps < 1) steps = 1;
       if (steps > 10) steps = 10;
     }
+    if(xDecimals===undefined)xDecimals=4;
+    if(yDecimals===undefined)yDecimals=4;
     var yIsInt = yStepSize > 0 && yStepSize === Math.floor(yStepSize);
     for (var i=0;i<=steps;i++) {
       var y = p.top + h - (h*i/steps);
       this.svg.appendChild(this._el('line',{x1:p.left,y1:y,x2:p.left+w,y2:y,stroke:this.options.gridColor,'stroke-width':'0.5'}));
-      this._text(p.left-5, y, yIsInt?Math.round(yMin+(yMax-yMin)*i/steps).toString():(yMin+(yMax-yMin)*i/steps).toFixed(4), {'text-anchor':'end','font-size':'10px'});
+      this._text(p.left-5, y, yIsInt?Math.round(yMin+(yMax-yMin)*i/steps).toString():(yMin+(yMax-yMin)*i/steps).toFixed(yDecimals), {'text-anchor':'end','font-size':'10px'});
     }
     for (var j=0;j<=steps;j++) {
       var x = p.left + (w*j/steps);
       this.svg.appendChild(this._el('line',{x1:x,y1:p.top,x2:x,y2:p.top+h,stroke:this.options.gridColor,'stroke-width':'0.5'}));
       var v = xMin+(xMax-xMin)*j/steps;
-      this._text(x, p.top+h+15, v.toFixed(4), {'font-size':'10px'});
+      this._text(x, p.top+h+15, v.toFixed(xDecimals), {'font-size':'10px'});
     }
     if (xLabel) this._text(p.left+w/2, p.top+h+35, xLabel, {'font-size':'11px'});
     if (yLabel) {
@@ -121,7 +123,7 @@ class NMEAChart {
     var yr=(yMax-yMin)||1; if(!config.yStepSize&&yMin>0)yMin-=yr*0.05; yMax+=yr*0.05;
     var tx=function(x){return p.left+((x-xMin)/((xMax-xMin)||1))*w;};
     var ty=function(y){return p.top+(1-(y-yMin)/(yMax-yMin))*h;};
-    this._drawGrid(p,w,h,xMin,xMax,yMin,yMax,config.xLabel,config.yLabel,config.yStepSize);
+    this._drawGrid(p,w,h,xMin,xMax,yMin,yMax,config.xLabel,config.yLabel,config.yStepSize,config.xDecimals,config.yDecimals);
     var self=this;
     if(config.thresholds){config.thresholds.forEach(function(th){
       var sy=ty(th.value); if(sy>=p.top&&sy<=p.top+h){
