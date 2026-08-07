@@ -273,16 +273,22 @@ class SatelliteAnalysis {
     });
     barData.sort(function(a,b){return a._order-b._order;});
     barData.forEach(function(d){delete d._order;});
-    chart.drawBar(barData, {title:'Average SNR by Satellite', decimals:1});
+    chart.drawBar(barData, {title:'Average SNR', decimals:1});
   }
 
   drawDOPTimeSeries(chart) {
     if (!chart || !this.gsaData.length) return;
+    var seen = {};
     var pdopDS=[], hdopDS=[], vdopDS=[];
-    this.gsaData.forEach(function(gsa,i) {
-      pdopDS.push({x:i,y:gsa.pdop});
-      hdopDS.push({x:i,y:gsa.hdop});
-      vdopDS.push({x:i,y:gsa.vdop});
+    var idx = 0;
+    this.gsaData.forEach(function(gsa) {
+      var ts = gsa.timestamp ? gsa.timestamp.toString() : '';
+      if (seen[ts]) return;
+      seen[ts] = true;
+      pdopDS.push({x:idx,y:gsa.pdop});
+      hdopDS.push({x:idx,y:gsa.hdop});
+      vdopDS.push({x:idx,y:gsa.vdop});
+      idx++;
     });
     chart.drawLine([
       {data:pdopDS,color:'#6f42c1',label:'PDOP',fill:false},
